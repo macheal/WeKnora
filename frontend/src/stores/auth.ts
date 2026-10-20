@@ -12,6 +12,7 @@ import { useChatResourcesStore } from '@/stores/chatResources'
 import { useEditorResourcesStore } from '@/stores/editorResources'
 import { useOrganizationStore } from '@/stores/organization'
 import { createSequencedRefresh } from '@/stores/sequencedRefresh'
+import { runtimeApiKey } from '@/utils'
 
 /** 登出时丢弃 Pinia 内的空间级资源缓存，避免 SPA 重登复用上一账号数据。 */
 function clearSessionResourceCaches() {
@@ -64,6 +65,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 计算属性
   const isLoggedIn = computed(() => {
+    // config.js 配了 API Key 时，/auth/me 写入的用户即可进入平台，不要求本地 JWT。
+    if (runtimeApiKey() && user.value) return true
     return !!token.value && !!user.value
   })
 

@@ -183,6 +183,15 @@ instance.interceptors.response.use(
       return Promise.reject(withHttpStatus({ status, message: msg || t('error.invalidCredentials') }, status));
     }
 
+    // 运行时 API Key 没有 refresh token。401 不能再走刷新并跳登录，否则刚放行的页面会被打回去。
+    if (error.response.status === 401 && (window.__RUNTIME_CONFIG__?.API_KEY || '').trim()) {
+      const { status, data } = error.response;
+      const msg = typeof data === 'object'
+        ? (typeof data?.error === 'string' ? data.error : (data?.error?.message || data?.message))
+        : data;
+      return Promise.reject(withHttpStatus({ status, message: msg || t('error.invalidCredentials') }, status));
+    }
+
     // 如果是401错误且不是刷新token的请求，尝试刷新token
     if (error.response.status === 401 && !originalRequest._retry && !originalRequest.url?.includes('/auth/refresh')) {
       originalRequest._retry = true;

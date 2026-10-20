@@ -4,6 +4,7 @@ import type { RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDeploymentCapabilitiesStore } from '@/stores/deploymentCapabilities'
 import { autoSetup, userInfoFromApi } from '@/api/auth'
+import { runtimeApiKey } from '@/utils'
 import type { DeploymentCapabilityKey } from '@/config/deploymentCapabilities'
 import { MessagePlugin } from 'tdesign-vue-next'
 import i18n from '@/i18n'
@@ -276,6 +277,15 @@ async function hydrateSessionFromToken(authStore: ReturnType<typeof useAuthStore
 
 let autoSetupAttempted = false
 let liteDeepLinkRestoreDone = false
+let apiKeyHydrateAttempted = false
+
+async function hydrateSessionFromApiKey(authStore: ReturnType<typeof useAuthStore>) {
+  if (!runtimeApiKey() || authStore.isLoggedIn) return authStore.isLoggedIn
+  if (apiKeyHydrateAttempted) return false
+  apiKeyHydrateAttempted = true
+  const ok = await authStore.refreshFromAuthMe()
+  return ok && authStore.isLoggedIn
+}
 
 // 路由守卫：检查认证状态和系统初始化状态
 router.beforeEach(async (to, from, next) => {
@@ -307,6 +317,11 @@ router.beforeEach(async (to, from, next) => {
         }
       }
     }
+  }
+
+  // config.js 的 API Key 能通过 /auth/me 还原用户和空间，不必先落到登录页。
+  if (runtimeApiKey() && !authStore.isLoggedIn) {
+    await hydrateSessionFromApiKey(authStore)
   }
 
   // Tenantless onboarding still requires a valid user token even though it

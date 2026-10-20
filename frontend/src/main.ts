@@ -19,6 +19,7 @@ import { initFont } from "@/composables/useFont";
 import { installTDesignIconOfflineGuard } from "@/utils/tdesign-icon-offline";
 import { installAutofillGuard } from "@/utils/disable-autofill";
 import { useAuthStore } from "@/stores/auth";
+import { runtimeApiKey } from "@/utils";
 
 // 必须在 Vue 组件挂载之前执行，避免 tdesign-icons 运行时请求 tdesign.gtimg.com
 installTDesignIconOfflineGuard();
@@ -41,7 +42,7 @@ async function bootstrap() {
   // Capabilities (can_create_tenant, auto_accept_invitation) are not cached
   // in localStorage — reconcile once before first paint when a session exists.
   const authStore = useAuthStore();
-  if (localStorage.getItem("weknora_token")) {
+  if (localStorage.getItem("weknora_token") || runtimeApiKey()) {
     try {
       await authStore.refreshFromAuthMe();
     } catch {

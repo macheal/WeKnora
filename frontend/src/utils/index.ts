@@ -15,6 +15,10 @@ declare global {
   }
 }
 
+export function runtimeApiKey(): string {
+  return (window.__RUNTIME_CONFIG__?.API_KEY || '').trim()
+}
+
 function positiveMegabytes(value: unknown, fallback: number): number {
   const n = typeof value === 'number' ? value : Number(value)
   return Number.isFinite(n) && n > 0 ? n : fallback

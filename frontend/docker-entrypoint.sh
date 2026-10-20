@@ -16,11 +16,19 @@ if [ "$SKILL_MB" -gt 512 ] 2>/dev/null; then
   SKILL_MB=512
 fi
 
+# 保留镜像里 public/config.js 的 API_KEY；WEKNORA_API_KEY 可在部署时覆盖。
+RUNTIME_API_KEY="${WEKNORA_API_KEY:-}"
+if [ -z "$RUNTIME_API_KEY" ] && [ -f /usr/share/nginx/html/config.js ]; then
+  RUNTIME_API_KEY=$(sed -n "s/.*API_KEY: ['\"]\\([^'\"]*\\)['\"].*/\\1/p" /usr/share/nginx/html/config.js | head -1)
+fi
+RUNTIME_API_KEY=$(printf '%s' "$RUNTIME_API_KEY" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
 cat > /usr/share/nginx/html/config.js << EOF
 window.__RUNTIME_CONFIG__ = {
   MAX_FILE_SIZE_MB: ${FILE_MB},
   MAX_SKILL_BUNDLE_SIZE_MB: ${SKILL_MB},
-  DEFAULT_LOCALE: "${RUNTIME_DEFAULT_LOCALE}"
+  DEFAULT_LOCALE: "${RUNTIME_DEFAULT_LOCALE}",
+  API_KEY: "${RUNTIME_API_KEY}"
 };
 EOF
 
