@@ -1,6 +1,6 @@
 <template>
     <div class="main" ref="dropzone" :style="{ '--sidebar-width': `${uiStore.sidebarDisplayWidth}px` }">
-        <Menu></Menu>
+        <Menu v-if="false"></Menu>
         <div v-if="isRouterAlive" class="platform-route-outlet">
             <RouterView />
         </div>

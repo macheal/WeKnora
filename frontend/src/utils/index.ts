@@ -9,6 +9,8 @@ declare global {
       MAX_FILE_SIZE_MB?: number;
       MAX_SKILL_BUNDLE_SIZE_MB?: number;
       DEFAULT_LOCALE?: string;
+      EMBED_BASE_URL?: string;
+      API_KEY?: string;
     };
   }
 }

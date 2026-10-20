@@ -75,8 +75,15 @@ instance.interceptors.request.use(
     const isEmbedAuth = typeof existingAuth === 'string' && existingAuth.startsWith('Embed ');
     const isEmbedPath = typeof config.url === 'string' && config.url.includes('/api/v1/embed/');
 
-    // 嵌入渠道使用 Embed token；勿用本地 JWT 覆盖（否则调试页会 401）
-    if (!isEmbedAuth) {
+    // public/config.js 里的 API_KEY 非空时，非嵌入请求改走 X-API-Key。
+    // 不能同时带有效 Bearer，后端会优先用 JWT，X-API-Key 不会生效。
+    const runtimeApiKey = (window.__RUNTIME_CONFIG__?.API_KEY || '').trim();
+    const useRuntimeApiKey = !isEmbedAuth && !isEmbedPath && runtimeApiKey !== '';
+    if (useRuntimeApiKey) {
+      config.headers['X-API-Key'] = runtimeApiKey;
+      delete config.headers['Authorization'];
+      delete config.headers['authorization'];
+    } else if (!isEmbedAuth) {
       const token = localStorage.getItem('weknora_token');
       if (token) {
         config.headers["Authorization"] = `Bearer ${token}`;
@@ -95,7 +102,8 @@ instance.interceptors.request.use(
     // 换之后只有第一批请求带 X-Tenant-ID"调成永久状态。
     // 后端 IsTenantAccessible 已经允许 header 指向 home 空间（自家），
     // 所以无脑附不会引入新风险。
-    if (!isEmbedAuth && !isEmbedPath) {
+    // 空间 API Key 不能切换空间。带上浏览器里存的 X-Tenant-ID 且与 key 不一致时，后端直接 403。
+    if (!isEmbedAuth && !isEmbedPath && !useRuntimeApiKey) {
       const selectedTenantId = localStorage.getItem('weknora_selected_tenant_id');
       if (selectedTenantId) {
         config.headers["X-Tenant-ID"] = selectedTenantId;
