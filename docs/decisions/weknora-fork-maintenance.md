@@ -1,90 +1,74 @@
-# WeKnora Fork Maintenance Policy
+# WeKnora Fork 维护规则
 
-- Status: Accepted
-- Date: 2026-10-20
-- Owner: Wang
-- Fork: `macheal/WeKnora`
-- Upstream: `Tencent/WeKnora`
+- 状态：已接受
+- 日期：2026-10-20
+- 负责人：王
+- Fork：`macheal/WeKnora`
+- 上游：`Tencent/WeKnora`
 
-## Decision
+## 决策
 
-WeKnora is maintained as an independent fork. Production extensions are based on
-the release deployed to Kubernetes, currently `v0.8.3`. Upstream contributions
-are prepared on temporary branches based on the latest `upstream/main`; they are
-not developed directly on the production extension branch.
+WeKnora 作为独立 fork 长期维护。生产环境中的扩展基于实际部署到 Kubernetes 的发布版本，当前为 `v0.8.3`。面向上游的贡献在临时分支上准备，该分支基于最新的 `upstream/main`，不直接在生产扩展分支上开发上游 PR。
 
-## Branch Model
+## 分支模型
 
-| Branch | Base | Purpose | Merge policy |
+| 分支 | 基线 | 用途 | 合并规则 |
 | --- | --- | --- | --- |
-| `main` | `upstream/main` | Clean mirror of Tencent | Fast-forward only |
-| `codex/weknora-extensions` | Release tag, currently `v0.8.3` | Long-lived production extensions | Merge feature branches; do not rebase |
-| `feat/*`, `fix/*` | `codex/weknora-extensions` | Internal features and fixes | Merge into the extension branch |
-| `upstream/feat/*`, `upstream/fix/*` | `upstream/main` | Minimal PR-ready changes | Rebase and submit to Tencent |
+| `main` | `upstream/main` | 保持与 Tencent 一致的干净镜像 | 仅允许快进合并 |
+| `codex/weknora-extensions` | 发布 tag，当前为 `v0.8.3` | 长期维护的生产扩展 | 合并功能分支，不做 rebase |
+| `feat/*`、`fix/*` | `codex/weknora-extensions` | 内部功能与修复 | 合并回扩展分支 |
+| `upstream/feat/*`、`upstream/fix/*` | `upstream/main` | 提交给上游的最小 PR 改动 | rebase 后提交给 Tencent |
 
-The production extension branch and upstream contribution branches are
-separate. This keeps upstream `main` changes out of the deployed line until a
-version upgrade has been tested.
+生产扩展分支与上游 PR 分支必须分开。这样在上游版本完成升级验证之前，`upstream/main` 的新改动不会进入生产扩展线。
 
-## Version and Upgrade Rules
+## 版本与升级规则
 
-The deployed release is the compatibility baseline, not the latest untagged
-`main` commit.
+兼容性基线是已经部署的发布版本，而不是尚未打 tag 的最新 `main` 提交。
 
-1. Deploy and test an upstream release before changing the extension baseline.
-2. Upgrade in a temporary branch:
-   `git switch -c chore/upgrade-vX.Y.Z codex/weknora-extensions`.
-3. Merge the new upstream release tag or main snapshot into that branch.
-4. Resolve conflicts in the upgrade branch and run the version-specific
-   migration and regression checks.
-5. Merge the upgrade branch into `codex/weknora-extensions`.
-6. Tag the downstream release, for example `v0.8.3-macheal.1`; never overwrite
-   an upstream tag.
+1. 先部署并验证上游新版本，再切换扩展基线。
+2. 在临时分支上升级：
+   `git switch -c chore/upgrade-vX.Y.Z codex/weknora-extensions`。
+3. 将新的上游发布 tag 或 main 快照合并到该分支。
+4. 在升级分支中解决冲突，并运行对应版本的迁移与回归检查。
+5. 将升级分支合并回 `codex/weknora-extensions`。
+6. 创建下游发布 tag，例如 `v0.8.3-macheal.1`；不得覆盖上游 tag。
 
-`main` must stay a clean upstream mirror. Do not commit local extensions to
-`main`.
+`main` 必须保持为干净的上游镜像，不得提交本地扩展。
 
-## Upstream PR Flow
+## 上游 PR 流程
 
-Before opening a PR against `Tencent/WeKnora:main`:
+向 `Tencent/WeKnora:main` 提交 PR 前，执行：
 
 ```bash
 git fetch upstream --prune --tags
 git switch -c upstream/feat/feature-name upstream/main
-# Apply or cherry-pick only the upstream-ready commits.
+# 只放入适合提交上游的提交
 git merge upstream/main
-# Resolve conflicts locally and run targeted tests.
+# 在本地解决冲突并运行针对性测试
 git push -u origin upstream/feat/feature-name
 ```
 
-The PR target is `Tencent/WeKnora:main`. The PR must not contain internal
-addresses, credentials, product-specific policy, or unrelated downstream
-changes.
+PR 的目标分支固定为 `Tencent/WeKnora:main`。PR 不得包含内部地址、凭证、产品专用策略或与本次改动无关的下游内容。
 
-After the upstream PR is merged, sync the result into the extension line as a
-separate migration change. Never assume an upstream merge automatically makes
-the downstream extension branch production-ready.
+上游 PR 合并后，再通过独立的迁移改动将结果同步到扩展线。不能因为上游已经合并，就默认下游扩展分支已经可以进入生产。
 
-## Compatibility Barriers
+## 兼容性隔离
 
-Prefer changes that are easy to carry across releases:
+优先采用容易跨版本维护的改动方式：
 
-- Put new capabilities behind new files, packages, routes, or adapters.
-- Isolate core changes and document the upstream file and commit they touch.
-- Gate incomplete behavior behind a feature flag that defaults to off.
-- Keep database migrations additive and test both PostgreSQL and SQLite paths.
-- Record conflicts, migration steps, and verification in the upgrade PR.
+- 新能力优先放入新文件、新包、新路由或适配层。
+- 对核心文件的改动保持小而集中，并记录所涉及的上游文件与提交。
+- 未完成的行为放到默认关闭的功能开关之后。
+- 数据库迁移保持增量式，并同时验证 PostgreSQL 与 SQLite 路径。
+- 在升级 PR 中记录冲突、迁移步骤和验证结果。
 
-## Required Verification
+## 必须验证的内容
 
-For an extension change, run the tests for the touched packages and the
-frontend build when UI files change. For an upgrade, additionally run the
-migration checks, memory-related regressions, and a smoke test of the deployed
-configuration. Record any environment-dependent failure rather than omitting it.
+扩展改动需要运行受影响包的测试；涉及 UI 时还要运行前端构建。版本升级还需要额外运行迁移检查、记忆相关回归测试和部署配置冒烟测试。环境相关失败必须记录，不能省略。
 
-## Current Baseline
+## 当前基线
 
-- Production release: `v0.8.3`
-- Release commit: `3e22822c1d2397be730c458c7539d0eb8c113a24`
-- Production extension branch: `codex/weknora-extensions`
-- Intended deployment: local Kubernetes
+- 生产发布版本：`v0.8.3`
+- 发布提交：`3e22822c1d2397be730c458c7539d0eb8c113a24`
+- 生产扩展分支：`codex/weknora-extensions`
+- 部署目标：本地 Kubernetes
