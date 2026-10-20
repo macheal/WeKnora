@@ -39,11 +39,51 @@ curl -X PUT "$BASE/api/v1/memory/settings" \
 | --- | --- | --- |
 | GET | `/memory/items` | 可选 status、limit、offset；`{success,data:[MemoryItem],total}` |
 | POST | `/memory/items` | `{kind,content,importance}`；200 `{success,data:MemoryItem}` |
+| POST | `/memory/items/batch` | `{items:[{kind,content,topic,importance}]}`；200 `{success,data:{created,skipped,outcomes}}` |
 | PUT | `/memory/items/:id` | `{content,importance}`；200 `{success,data:MemoryItem}` |
 | DELETE | `/memory/items/:id` | 200 `{"success":true}` |
 | POST | `/memory/items/:id/confirm` | 200 `{success,data:MemoryItem}`；推断已失效或其依据已被修改时返回 409 |
 | POST | `/memory/items/:id/reject` | 200 `{"success":true}` |
 | DELETE | `/memory/items` | 清空当前身份；200 `{success,removed}` |
+
+批量写入每条都走与单条 `POST /memory/items` 相同的路径：去重、敏感信息脱敏、主题冲突替换和容量控制一律生效，逐条结果在 `outcomes` 中返回，单条失败不影响其余条目。一次请求最多 200 条。
+
+```bash
+curl -X POST "$BASE/api/v1/memory/items/batch" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"items":[{"kind":"fact","content":"生产库已迁到 PostgreSQL","topic":"数据库"}]}'
+```
+
+## 检索与召回
+
+| 方法 | 路径 | 请求 / 响应 |
+| --- | --- | --- |
+| POST | `/memory/search` | `{query,limit}`；200 `{success,data:{available,memories,count}}` |
+| GET | `/memory/search` | 查询串 `?query=&limit=`，与 POST 等价 |
+| POST | `/memory/recall` | `{query}`；200 `{success,data:{prompt,items,count}}` |
+
+`search` 按查询在调用者自己的记忆里做相关性排序，只返回 active 条目，`limit` 默认 10、上限 20。`available` 为 false 表示当前作用域记忆被关闭，与「没有命中」区分开：调用方不应把关闭当成空记忆。
+
+`recall` 返回可直接追加到系统提示词的用户记忆信封（`prompt`）以及其中的条目，语义与对话内每轮的常驻注入一致。`query` 必填。
+
+```bash
+curl -X POST "$BASE/api/v1/memory/search" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"query":"数据库","limit":5}'
+
+curl -X POST "$BASE/api/v1/memory/recall" \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"query":"部署偏好"}'
+```
+
+### 外部调用者的身份
+
+当 API Key 所在工作空间把 `api_principal_config.mode` 设为 `direct_header` 或 `signed_token` 时，记忆作用域会绑定到外部用户身份，而不是整个 Key：
+
+- `direct_header`：请求头 `X-External-User-ID: <app_name>:<user_id>`，主体为 `api_external_user:<tenantID>:<app_name>:<user_id>`。
+- `signed_token`：请求头 `X-External-User-Token` 携带外部用户 JWT，验签后取 `sub` 作为用户标识。
+
+这样同一个 Key 可以为多个终端用户分别维护记忆，彼此不共享。作用域始终由请求上下文推导，接口不接受 `subject_id`。
 
 `status` 可为 active、pending、superseded、archived，省略不过滤。`limit` 默认 50，合法范围 1–200，越界回落 50；`offset` 默认 0，负值归零。kind 为 profile/preference/fact/task/interest；内容为简短记忆，最长 300 个字符，importance 用于重要度排序。
 

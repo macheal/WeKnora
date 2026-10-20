@@ -10572,6 +10572,49 @@ const docTemplate = `{
                 }
             }
         },
+        "/memory/items/batch": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "批量保存事实/偏好等条目，每条都走与单条写入相同的去重、脱敏、冲突替换与容量控制",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "长期记忆"
+                ],
+                "summary": "批量写入长期记忆",
+                "parameters": [
+                    {
+                        "description": "条目列表",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "逐条写入结果",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/memory/items/{id}": {
             "put": {
                 "security": [
@@ -10714,6 +10757,134 @@ const docTemplate = `{
                 "responses": {
                     "200": {
                         "description": "否决成功",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/memory/recall": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "返回可直接注入系统提示词的用户记忆信封与命中的条目",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "长期记忆"
+                ],
+                "summary": "预加载我的长期记忆",
+                "parameters": [
+                    {
+                        "description": "检索条件：query",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "记忆信封与命中条目",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/memory/search": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "与 POST /memory/search 等价，便于调试与简单客户端使用",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "长期记忆"
+                ],
+                "summary": "检索我的长期记忆（查询串形式）",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "检索词",
+                        "name": "query",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "返回条数，默认 10，最大 20",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "命中的记忆",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    },
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "按查询在调用者自己的长期记忆里做相关性检索，返回命中的条目",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "长期记忆"
+                ],
+                "summary": "检索我的长期记忆",
+                "parameters": [
+                    {
+                        "description": "检索条件：query、limit",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "命中的记忆",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true

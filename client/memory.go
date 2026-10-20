@@ -122,6 +122,60 @@ type memoryConsolidateResponse struct {
 	Data    *MemoryConsolidationResult `json:"data"`
 }
 
+// MemorySearchResult is what POST/GET /memory/search returns.
+type MemorySearchResult struct {
+	// Available is false when memory is off for the caller's scope.
+	Available bool          `json:"available"`
+	Memories  []*MemoryItem `json:"memories"`
+	Count     int           `json:"count"`
+}
+
+// MemoryRecallResult is what POST /memory/recall returns: the prompt envelope
+// an agent can append to its system prompt, plus the items behind it.
+type MemoryRecallResult struct {
+	Prompt string        `json:"prompt"`
+	Items  []*MemoryItem `json:"items"`
+	Count  int           `json:"count"`
+}
+
+// MemoryBatchOutcome reports what happened to one item in a batch write.
+type MemoryBatchOutcome struct {
+	Index  int         `json:"index"`
+	Status string      `json:"status"`
+	Reason string      `json:"reason,omitempty"`
+	Item   *MemoryItem `json:"item,omitempty"`
+}
+
+// MemoryBatchResult is what POST /memory/items/batch returns.
+type MemoryBatchResult struct {
+	Created  int                   `json:"created"`
+	Skipped  int                   `json:"skipped"`
+	Outcomes []*MemoryBatchOutcome `json:"outcomes"`
+}
+
+// MemoryBatchItem is one entry in a batch write request.
+type MemoryBatchItem struct {
+	Kind       string `json:"kind"`
+	Content    string `json:"content"`
+	Topic      string `json:"topic,omitempty"`
+	Importance int    `json:"importance,omitempty"`
+}
+
+type memorySearchResponse struct {
+	Success bool                `json:"success"`
+	Data    *MemorySearchResult `json:"data"`
+}
+
+type memoryRecallResponse struct {
+	Success bool                `json:"success"`
+	Data    *MemoryRecallResult `json:"data"`
+}
+
+type memoryBatchResponse struct {
+	Success bool               `json:"success"`
+	Data    *MemoryBatchResult `json:"data"`
+}
+
 func memoryListQuery(status string, limit, offset int) url.Values {
 	q := url.Values{}
 	if status != "" {
@@ -369,6 +423,54 @@ func (c *Client) ConsolidateMemory(ctx context.Context) (*MemoryConsolidationRes
 		return nil, err
 	}
 	var out memoryConsolidateResponse
+	if err := parseResponse(resp, &out); err != nil {
+		return nil, err
+	}
+	return out.Data, nil
+}
+
+// SearchMemory ranks the caller's memories against a query. limit <= 0 uses the
+// server default of 10; the server caps it at 20.
+func (c *Client) SearchMemory(ctx context.Context, query string, limit int) (*MemorySearchResult, error) {
+	body := map[string]interface{}{"query": query}
+	if limit > 0 {
+		body["limit"] = limit
+	}
+	resp, err := c.doRequest(ctx, http.MethodPost, "/api/v1/memory/search", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out memorySearchResponse
+	if err := parseResponse(resp, &out); err != nil {
+		return nil, err
+	}
+	return out.Data, nil
+}
+
+// RecallMemory returns the prompt envelope plus matched items for one query.
+// It reaches past the per-turn block the way the in-process agent does.
+func (c *Client) RecallMemory(ctx context.Context, query string) (*MemoryRecallResult, error) {
+	body := map[string]interface{}{"query": query}
+	resp, err := c.doRequest(ctx, http.MethodPost, "/api/v1/memory/recall", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out memoryRecallResponse
+	if err := parseResponse(resp, &out); err != nil {
+		return nil, err
+	}
+	return out.Data, nil
+}
+
+// CreateMemoryItems writes several memories in one request. Each item goes
+// through the same dedup, redaction and conflict resolution as CreateMemoryItem.
+func (c *Client) CreateMemoryItems(ctx context.Context, items []MemoryBatchItem) (*MemoryBatchResult, error) {
+	body := map[string]interface{}{"items": items}
+	resp, err := c.doRequest(ctx, http.MethodPost, "/api/v1/memory/items/batch", body, nil)
+	if err != nil {
+		return nil, err
+	}
+	var out memoryBatchResponse
 	if err := parseResponse(resp, &out); err != nil {
 		return nil, err
 	}

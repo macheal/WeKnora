@@ -14398,6 +14398,110 @@ paths:
       summary: 否决一条推断出的记忆
       tags:
       - 长期记忆
+  /memory/items/batch:
+    post:
+      consumes:
+      - application/json
+      description: 批量保存事实/偏好等条目，每条都走与单条写入相同的去重、脱敏、冲突替换与容量控制
+      parameters:
+      - description: 条目列表
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 逐条写入结果
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      - ApiKeyAuth: []
+      summary: 批量写入长期记忆
+      tags:
+      - 长期记忆
+  /memory/recall:
+    post:
+      consumes:
+      - application/json
+      description: 返回可直接注入系统提示词的用户记忆信封与命中的条目
+      parameters:
+      - description: 检索条件：query
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 记忆信封与命中条目
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      - ApiKeyAuth: []
+      summary: 预加载我的长期记忆
+      tags:
+      - 长期记忆
+  /memory/search:
+    get:
+      description: 与 POST /memory/search 等价，便于调试与简单客户端使用
+      parameters:
+      - description: 检索词
+        in: query
+        name: query
+        required: true
+        type: string
+      - description: 返回条数，默认 10，最大 20
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 命中的记忆
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      - ApiKeyAuth: []
+      summary: 检索我的长期记忆（查询串形式）
+      tags:
+      - 长期记忆
+    post:
+      consumes:
+      - application/json
+      description: 按查询在调用者自己的长期记忆里做相关性检索，返回命中的条目
+      parameters:
+      - description: 检索条件：query、limit
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 命中的记忆
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - Bearer: []
+      - ApiKeyAuth: []
+      summary: 检索我的长期记忆
+      tags:
+      - 长期记忆
   /memory/settings:
     get:
       description: 返回合并后的记忆开关状态（空间级 + 个人级）与记忆条数

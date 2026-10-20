@@ -22,8 +22,17 @@ func RegisterMemoryRoutes(r *gin.RouterGroup, memoryHandler *handler.MemoryHandl
 	{
 		memoryGroup.GET("/settings", memoryHandler.GetSettings)
 		memoryGroup.PUT("/settings", memoryHandler.UpdateSettings)
+		// Search and recall are the read surface an external agent uses to reach
+		// past the per-turn block; both reuse the internal ranking, so an API
+		// caller gets exactly what the in-process agent would.
+		memoryGroup.POST("/search", memoryHandler.SearchMemory)
+		memoryGroup.GET("/search", memoryHandler.SearchMemoryQuery)
+		memoryGroup.POST("/recall", memoryHandler.Recall)
 		memoryGroup.GET("/items", memoryHandler.ListItems)
 		memoryGroup.POST("/items", memoryHandler.CreateItem)
+		// Batch write sits on the same handler path as POST /items so dedup,
+		// redaction, conflict resolution and the capacity cap cannot be skipped.
+		memoryGroup.POST("/items/batch", memoryHandler.CreateItems)
 		memoryGroup.DELETE("/items", memoryHandler.Clear)
 		memoryGroup.PUT("/items/:id", memoryHandler.UpdateItem)
 		memoryGroup.DELETE("/items/:id", memoryHandler.DeleteItem)

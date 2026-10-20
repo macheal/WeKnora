@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -442,6 +444,197 @@ func (h *MemoryHandler) Consolidate(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+type memorySearchRequest struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit"`
+}
+
+// SearchMemory godoc
+// @Summary      检索我的长期记忆
+// @Description  按查询在调用者自己的长期记忆里做相关性检索，返回命中的条目
+// @Tags         长期记忆
+// @Accept       json
+// @Produce      json
+// @Param        request  body      object  true  "检索条件：query、limit"
+// @Success      200      {object}  map[string]interface{}  "命中的记忆"
+// @Security     Bearer
+// @Security     ApiKeyAuth
+// @Router       /memory/search [post]
+func (h *MemoryHandler) SearchMemory(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req memorySearchRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		return
+	}
+	h.writeSearchResponse(c, ctx, req.Query, req.Limit)
+}
+
+// SearchMemoryQuery godoc
+// @Summary      检索我的长期记忆（查询串形式）
+// @Description  与 POST /memory/search 等价，便于调试与简单客户端使用
+// @Tags         长期记忆
+// @Produce      json
+// @Param        query  query     string  true   "检索词"
+// @Param        limit  query     int     false  "返回条数，默认 10，最大 20"
+// @Success      200    {object}  map[string]interface{}  "命中的记忆"
+// @Security     Bearer
+// @Security     ApiKeyAuth
+// @Router       /memory/search [get]
+func (h *MemoryHandler) SearchMemoryQuery(c *gin.Context) {
+	ctx := c.Request.Context()
+	limit := 0
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil {
+			c.Error(apperrors.NewBadRequestError("invalid limit"))
+			return
+		}
+		limit = parsed
+	}
+	h.writeSearchResponse(c, ctx, c.Query("query"), limit)
+}
+
+func (h *MemoryHandler) writeSearchResponse(c *gin.Context, ctx context.Context, query string, limit int) {
+	result := h.memoryService.SearchMemory(ctx, query, limit)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"available": result.Available,
+			"effective": result.Available,
+			"memories":  result.Items,
+			"count":     len(result.Items),
+		},
+	})
+}
+
+type memoryRecallRequest struct {
+	Query string `json:"query"`
+}
+
+// Recall godoc
+// @Summary      预加载我的长期记忆
+// @Description  返回可直接注入系统提示词的用户记忆信封与命中的条目
+// @Tags         长期记忆
+// @Accept       json
+// @Produce      json
+// @Param        request  body      object  true  "检索条件：query"
+// @Success      200      {object}  map[string]interface{}  "记忆信封与命中条目"
+// @Security     Bearer
+// @Security     ApiKeyAuth
+// @Router       /memory/recall [post]
+func (h *MemoryHandler) Recall(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req memoryRecallRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		return
+	}
+	if strings.TrimSpace(req.Query) == "" {
+		c.Error(apperrors.NewBadRequestError("query is required"))
+		return
+	}
+	result := h.memoryService.Recall(ctx, req.Query)
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"prompt": result.Prompt,
+			"items":  result.Items,
+			"count":  len(result.Items),
+		},
+	})
+}
+
+type batchMemoryItem struct {
+	Kind       string `json:"kind"`
+	Content    string `json:"content"`
+	Topic      string `json:"topic"`
+	Importance int    `json:"importance"`
+}
+
+type createMemoryItemsRequest struct {
+	Items []batchMemoryItem `json:"items"`
+}
+
+// memoryBatchOutcome reports what happened to one item in a batch write.
+type memoryBatchOutcome struct {
+	Index  int               `json:"index"`
+	Status string            `json:"status"`
+	Reason string            `json:"reason,omitempty"`
+	Item   *types.MemoryItem `json:"item,omitempty"`
+}
+
+// memoryBatchMaxItems bounds one batch so a single request cannot write an
+// unbounded number of rows.
+const memoryBatchMaxItems = 200
+
+// CreateItems godoc
+// @Summary      批量写入长期记忆
+// @Description  批量保存事实/偏好等条目，每条都走与单条写入相同的去重、脱敏、冲突替换与容量控制
+// @Tags         长期记忆
+// @Accept       json
+// @Produce      json
+// @Param        request  body      object  true  "条目列表"
+// @Success      200      {object}  map[string]interface{}  "逐条写入结果"
+// @Security     Bearer
+// @Security     ApiKeyAuth
+// @Router       /memory/items/batch [post]
+func (h *MemoryHandler) CreateItems(c *gin.Context) {
+	ctx := c.Request.Context()
+	var req createMemoryItemsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.Error(apperrors.NewValidationError("Invalid request data").WithDetails(err.Error()))
+		return
+	}
+	if len(req.Items) == 0 {
+		c.Error(apperrors.NewBadRequestError("items is required"))
+		return
+	}
+	if len(req.Items) > memoryBatchMaxItems {
+		c.Error(apperrors.NewBadRequestError("too many items in one request"))
+		return
+	}
+	if !h.memoryService.MemoryAvailable(ctx) {
+		h.fail(c, memory.ErrMemoryDisabled, "memory is disabled")
+		return
+	}
+
+	outcomes := make([]memoryBatchOutcome, 0, len(req.Items))
+	created, skipped := 0, 0
+	for index, in := range req.Items {
+		item, err := h.memoryService.Remember(ctx, types.MemoryItem{
+			Kind:       in.Kind,
+			Content:    in.Content,
+			Topic:      in.Topic,
+			Importance: in.Importance,
+			Origin:     types.MemoryOriginManual,
+		})
+		if err != nil {
+			skipped++
+			outcomes = append(outcomes, memoryBatchOutcome{
+				Index:  index,
+				Status: "skipped",
+				Reason: err.Error(),
+			})
+			continue
+		}
+		created++
+		outcomes = append(outcomes, memoryBatchOutcome{
+			Index:  index,
+			Status: "created",
+			Item:   item,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"created":  created,
+			"skipped":  skipped,
+			"outcomes": outcomes,
+		},
+	})
 }
 
 // fail maps service errors onto HTTP responses. A missing item and an item
